@@ -1,0 +1,9 @@
+.navbar-collapse {
+    transition: all 0.4s ease-in-out;
+}
+
+@media (max-width: 991px) {
+    .navbar-collapse {
+        overflow: hidden;
+    }
+}

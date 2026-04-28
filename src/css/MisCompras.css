@@ -1,0 +1,5 @@
+.mis-compras__item-miniatura {
+  width: 50px;
+  height: 75px;
+  object-fit: cover;
+}

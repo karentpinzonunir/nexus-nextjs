@@ -1,0 +1,13 @@
+.detalle-libro__portada {
+  max-height: 300px;
+  width: 100%;
+  object-fit: contain;
+}
+
+.detalle-libro__portada--completo {
+  max-height: 400px;
+}
+
+.detalle-libro__descripcion {
+  text-align: justify;
+}
