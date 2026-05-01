@@ -1,3 +1,4 @@
+'use client';
 import { useState } from "react";
 import { Form, Button, Row, Col } from "react-bootstrap";
 import MySwal from "../utils/swal";

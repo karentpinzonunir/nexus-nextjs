@@ -1,14 +1,14 @@
-"use client";
+//"use client";
 
 import { use } from "react";
 import VistaLibro from "@/components/VistaLibro";
-import MySwal from "@/utils/swal";
+//import MySwal from "@/utils/swal";
 
 export default function LibroDetallePage(props) {
   const params = use(props.params);
   const { id } = params;
-
-  const agregarAlCarrito = (libro) => {
+// esta funcion era innecesaria ya que VistaLibro tiene su propio manejador para agregar al carrito
+  /*const agregarAlCarrito = (libro) => {
     MySwal.fire({
       icon: "success",
       title: "Añadido al carrito",
@@ -20,7 +20,8 @@ export default function LibroDetallePage(props) {
     <VistaLibro
       id={id}
       modoCompleto={true}
-      onAgregarCarrito={agregarAlCarrito}
+     onAgregarCarrito={agregarAlCarrito}
     />
-  );
+  );*/
+  return (<VistaLibro id={id} modoCompleto={true} />);
 }

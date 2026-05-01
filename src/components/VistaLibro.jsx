@@ -1,3 +1,4 @@
+'use client';
 import React from "react";
 import { Spinner, Alert, Row, Col, Button } from "react-bootstrap";
 import useFetch from "../hooks/useFetch";
@@ -23,6 +24,7 @@ const VistaLibro = ({ id, modoCompleto = false, onAgregarCarrito }) => {
   } = useFetch(
     `https://mock.apidog.com/m1/1188124-1182752-default/api/categorias`
   );
+  
 
   if (cargandoLibro || cargandoCats) {
     return (

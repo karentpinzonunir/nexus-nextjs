@@ -1,5 +1,5 @@
 {
-  "name": "nextjs-react",
+  "name": "nextjs-nexus",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,17 +9,17 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "16.2.4",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "bootstrap": "^5.3.8",
-    "bootstrap-icons": "^1.13.1",
-    "react-bootstrap": "^2.10.10",
-    "sweetalert2": "^11.26.18",
-    "sweetalert2-react-content": "^5.1.1"
+    "bootstrap": "^5.3.3",
+    "bootstrap-icons": "^1.11.3",
+    "next": "15.0.3",
+    "react": "18.2.0",
+    "react-bootstrap": "^2.10.2",
+    "react-dom": "18.2.0",
+    "sweetalert2": "^11.10.8",
+    "sweetalert2-react-content": "^5.0.7"
   },
   "devDependencies": {
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4"
+    "eslint": "^8",
+    "eslint-config-next": "15.0.3"
   }
 }

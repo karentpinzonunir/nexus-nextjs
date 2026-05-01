@@ -1,3 +1,4 @@
+'use client';
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Modal, Container, Alert } from "react-bootstrap";
