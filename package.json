@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "bootstrap": "^5.3.3",
     "bootstrap-icons": "^1.11.3",
     "next": "15.0.3",
@@ -16,7 +17,8 @@
     "react-bootstrap": "^2.10.2",
     "react-dom": "18.2.0",
     "sweetalert2": "^11.10.8",
-    "sweetalert2-react-content": "^5.0.7"
+    "sweetalert2-react-content": "^5.0.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "eslint": "^8",
