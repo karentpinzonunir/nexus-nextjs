@@ -1,4 +1,4 @@
-// src/app/api/productos/[id]/route.js
+
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/db'
 import { productoSchema } from '@/lib/schemas'
@@ -15,8 +15,7 @@ export async function PUT(request, { params }) {
     try {
         const { id } = params
         const body = await request.json()
-        const validData = productoSchema.partial().parse(body) // partial permite editar solo algunos campos
-
+        const validData = productoSchema.partial().parse(body) 
         const { data, error } = await supabase
             .from('producto_editorial')
             .update(validData)
