@@ -6,7 +6,7 @@ import { categoriaSchema } from '@/lib/schemas'
 // GET /api/categorias/{id}
 export async function GET(request, { params }) {
   try {
-    const { id } = params
+    const { id } = await params
 
     const { data, error } = await supabase
       .from('categoria')
@@ -34,7 +34,7 @@ export async function GET(request, { params }) {
 // PUT /api/categorias/{id}
 export async function PUT(request, { params }) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
 
     // Validación con Zod
@@ -73,7 +73,7 @@ export async function PUT(request, { params }) {
 // DELETE /api/categorias/{id}
 export async function DELETE(request, { params }) {
   try {
-    const { id } = params
+    const { id } = await params
 
     const { error } = await supabase
       .from('categoria')
