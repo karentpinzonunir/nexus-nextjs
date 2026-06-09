@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/db'
 
 export async function GET(request, { params }) {
-    const { id } = params // id del usuario
+    const { id } = await params // id del usuario
 
     const { data, error } = await supabase
         .from('compra')

@@ -1,10 +1,9 @@
-
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/db'
 import { productoSchema } from '@/lib/schemas'
 
 export async function GET(request, { params }) {
-    const { id } = params
+    const { id } = await params
     const { data, error } = await supabase.from('producto_editorial').select('*').eq('id_producto', id).single()
 
     if (error || !data) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
@@ -13,9 +12,9 @@ export async function GET(request, { params }) {
 
 export async function PUT(request, { params }) {
     try {
-        const { id } = params
+        const { id } = await params
         const body = await request.json()
-        const validData = productoSchema.partial().parse(body) 
+        const validData = productoSchema.partial().parse(body)
         const { data, error } = await supabase
             .from('producto_editorial')
             .update(validData)
@@ -32,7 +31,7 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-    const { id } = params
+    const { id } = await params
     const { error } = await supabase.from('producto_editorial').delete().eq('id_producto', id)
     if (error) return NextResponse.json({ error: 'Error al eliminar' }, { status: 500 })
     return new NextResponse(null, { status: 204 })
