@@ -42,6 +42,10 @@ a {
   text-decoration: none;
 }
 
+.app__cuerpo {
+  min-height: 80vh;
+}
+
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;

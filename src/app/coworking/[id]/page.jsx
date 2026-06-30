@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
-import { Container, Spinner, Alert, Modal } from "react-bootstrap";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { Container, Spinner, Alert, Modal, Form, Button } from "react-bootstrap";
+import { useRouter, useParams } from "next/navigation";
 import useFetch from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
 import { useReservas } from "@/context/ReservasContext";
@@ -11,95 +11,173 @@ import CheckoutForm from "@/components/CheckoutForm";
 import MySwal from "@/utils/swal";
 import "@/css/CoworkingDetalle.css";
 
-export default function CoworkingDetallePage(props) {
-  const params = use(props.params);
-  const { id } = params;
-
+export default function CoworkingDetallePage() {
+  const { id } = useParams();
   const { usuario } = useAuth();
-  const { agregarReserva, reservasLocales } = useReservas();
+  const { agregarReserva } = useReservas();
   const router = useRouter();
 
-  const {
-    data: espacioData,
-    cargando,
-    error,
-  } = useFetch(
-    `https://mock.apidog.com/m1/1188124-1182752-default/api/espacios?id=${id}`
-  );
+  const todayString = (() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  })();
+
+  const { data: espacioRaw, cargando, error } = useFetch(`/api/espacios/${encodeURIComponent(id)}`);
 
   const [mostrarLogin, setMostrarLogin] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
   const [checkoutPendiente, setCheckoutPendiente] = useState(false);
   const [reservaSeleccionada, setReservaSeleccionada] = useState(null);
-  const [horarioLocal, setHorarioLocal] = useState(null);
-  const precioReserva =
-    espacioData && espacioData.length > 0 ? espacioData[0].precio : 0;
+
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [loadingReservasFecha, setLoadingReservasFecha] = useState(false);
+  const [reservasFecha, setReservasFecha] = useState([]);
+  const [occupiedHoursSet, setOccupiedHoursSet] = useState(new Set());
+
+  const [selectedHours, setSelectedHours] = useState(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const resolvedRawEspacio = (() => {
+    if (!espacioRaw) return null;
+    if (Array.isArray(espacioRaw)) return espacioRaw[0] ?? null;
+    if (espacioRaw.data && typeof espacioRaw.data === "object" && "espacio" in espacioRaw.data) {
+      return espacioRaw.data.espacio ?? null;
+    }
+    if (espacioRaw.data && Array.isArray(espacioRaw.data)) return espacioRaw.data[0] ?? null;
+    if (espacioRaw.espacio && typeof espacioRaw.espacio === "object") return espacioRaw.espacio;
+    return espacioRaw;
+  })();
+
+  const espacio = resolvedRawEspacio
+    ? {
+      id: resolvedRawEspacio.id_espacio ?? resolvedRawEspacio.id,
+      nombre: resolvedRawEspacio.nombre,
+      capacidad: resolvedRawEspacio.capacidad,
+      descripcion: resolvedRawEspacio.descripcion,
+      zona: resolvedRawEspacio.ubicacion ?? resolvedRawEspacio.zona,
+      precio: resolvedRawEspacio.precio_hora ?? resolvedRawEspacio.precio ?? 0,
+    }
+    : null;
+
+  function hourLabel(h) {
+    const hour12 = ((h + 11) % 12) + 1;
+    const ampm = h < 12 ? "a.m." : "p.m.";
+    return `${hour12}:00 ${ampm}`;
+  }
+
+  function buildDailyHours() {
+    const arr = [];
+    for (let h = 8; h < 20; h++) arr.push(h);
+    return arr;
+  }
+
+  function parseHourFromISOString(isoString) {
+    const date = new Date(isoString);
+    return date.getUTCHours();
+  }
 
   useEffect(() => {
-    if (!espacioData || espacioData.length === 0) return;
+    let mounted = true;
+    async function fetchReservas() {
+      if (!selectedDate) {
+        setReservasFecha([]);
+        setOccupiedHoursSet(new Set());
+        setSelectedHours(new Set());
+        return;
+      }
 
-    const espacio = espacioData[0];
+      setLoadingReservasFecha(true);
+      try {
+        const res = await fetch(
+          `/api/reservas?fecha=${encodeURIComponent(selectedDate)}&espacio=${encodeURIComponent(id)}`
+        );
+        if (!res.ok) throw new Error("Error al consultar reservas");
+        const json = await res.json();
+        const data = Array.isArray(json) ? json : json?.data ?? [];
+        if (!mounted) return;
+        setReservasFecha(data);
 
-    const nuevoHorario = JSON.parse(JSON.stringify(espacio.horario));
+        const occupied = new Set();
+        const hours = buildDailyHours();
+        const reservasParaEspacio = data;
 
-    const reservasEsteEspacio = reservasLocales.filter(
-      (r) => String(r.espacioId) === String(id)
-    );
+        for (const reserva of reservasParaEspacio) {
+          const inicioHora = parseHourFromISOString(reserva.fecha_hora_inicio);
+          const finHora = parseHourFromISOString(reserva.fecha_hora_fin);
 
-    Object.keys(nuevoHorario).forEach((dia) => {
-      Object.keys(nuevoHorario[dia]).forEach((hora) => {
-        const reservasEnSlot = reservasEsteEspacio.filter(
-          (r) => r.dia === dia && r.hora === hora
-        ).length;
-
-        const slotBase = nuevoHorario[dia][hora] || {
-          estado: false,
-          cupos: null,
-        };
-
-        if (espacio.tipo === "grupal") {
-          const cuposBase = slotBase.cupos ?? 0;
-          const cuposRestantes = Math.max(cuposBase - reservasEnSlot, 0);
-
-          nuevoHorario[dia][hora] = {
-            ...slotBase,
-            cupos: cuposRestantes,
-            estado: cuposRestantes === 0,
-          };
-        } else {
-          if (reservasEnSlot > 0) {
-            nuevoHorario[dia][hora] = {
-              ...slotBase,
-              estado: true,
-              cupos: 0,
-            };
+          for (let h = inicioHora; h < finHora; h++) {
+            if (h >= 8 && h < 20) {
+              occupied.add(h);
+            }
           }
         }
-      });
+
+        setOccupiedHoursSet(occupied);
+
+        setSelectedHours((prev) => {
+          const clone = new Set(prev);
+          for (const s of Array.from(clone)) {
+            if (occupied.has(s)) clone.delete(s);
+          }
+          return clone;
+        });
+      } catch (err) {
+        console.error("Error fetch reservas por fecha:", err);
+        setReservasFecha([]);
+        setOccupiedHoursSet(new Set());
+        setSelectedHours(new Set());
+      } finally {
+        if (mounted) setLoadingReservasFecha(false);
+      }
+    }
+
+    fetchReservas();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedDate, id]);
+
+  const toggleSelectHour = (h) => {
+    if (occupiedHoursSet.has(h)) return;
+    setSelectedHours((prev) => {
+      const clone = new Set(prev);
+      if (clone.has(h)) clone.delete(h);
+      else clone.add(h);
+      return clone;
     });
+  };
 
-    setHorarioLocal(nuevoHorario);
-  }, [espacioData, reservasLocales, id]);
+  const onReservarClick = async () => {
+    if (!selectedDate || selectedHours.size === 0) {
+      await MySwal.fire({
+        icon: "info",
+        title: "Selecciona fecha y horario",
+        text: "Elige una fecha y al menos un horario antes de reservar.",
+      });
+      return;
+    }
 
-  const manejarReserva = async (dia, hora) => {
+    const horasArray = Array.from(selectedHours).sort((a, b) => a - b);
+    const horasLabel = horasArray.map((h) => hourLabel(h)).join(", ");
+
     if (!usuario) {
-      setReservaSeleccionada({ dia, hora });
+      setReservaSeleccionada({ dia: selectedDate, hours: horasArray, horasLabel });
       setCheckoutPendiente(true);
-
       const res = await MySwal.fire({
         icon: "info",
-        title: "Inicia sesión para reservar",
-        text: "Necesitas una cuenta para realizar una reserva.",
-        confirmButtonText: "Iniciar sesión",
+        title: "Inicia sesión",
+        text: "Necesitas una cuenta para reservar.",
+        confirmButtonText: "Entrar",
         showCancelButton: true,
-        cancelButtonText: "Cancelar",
       });
-
       if (res.isConfirmed) setMostrarLogin(true);
       return;
     }
 
-    setReservaSeleccionada({ dia, hora });
+    setReservaSeleccionada({ dia: selectedDate, hours: horasArray, horasLabel });
     setMostrarPago(true);
   };
 
@@ -113,349 +191,224 @@ export default function CoworkingDetallePage(props) {
 
   const onPagoExitoso = async () => {
     try {
-      const [tiempo, periodo] = reservaSeleccionada.hora.split(" ");
-      let [horas, minutos] = tiempo.split(":").map(Number);
+      const { dia, hours } = reservaSeleccionada || {};
+      if (!Array.isArray(hours) || hours.length === 0) throw new Error("No hay horas seleccionadas.");
 
-      let nuevasHoras = horas + 1;
-      let nuevoPeriodo = periodo;
+      setIsSubmitting(true);
 
-      if (nuevasHoras === 12) {
-        nuevoPeriodo = periodo === "a.m." ? "p.m." : "a.m.";
-      } else if (nuevasHoras > 12) {
-        nuevasHoras = 1;
-      }
+      const toInsert = hours.map((h) => ({
+        usuario_id: Number(usuario?.id),
+        espacio_id: Number(id),
+        fecha_hora_inicio: `${dia}T${String(h).padStart(2, "0")}:00:00Z`,
+        fecha_hora_fin: `${dia}T${String(h + 1).padStart(2, "0")}:00:00Z`,
+      }));
 
-      const horaFin = `${nuevasHoras}:${
-        minutos < 10 ? "0" + minutos : minutos
-      } ${nuevoPeriodo}`;
-
-      const response = await fetch(
-        "https://mock.apidog.com/m1/1188124-1182752-default/api/reservas",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            espacioId: parseInt(id),
-            usuarioId: usuario.id,
-            dia: reservaSeleccionada.dia,
-            horaInicio: reservaSeleccionada.hora,
-            horaFin: horaFin,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Hubo un problema registrando la reserva.");
-      }
-
-      const espacio = espacioData[0];
-
-      setHorarioLocal((prevHorario) => {
-        const nuevoHorario = JSON.parse(JSON.stringify(prevHorario));
-        const dia = reservaSeleccionada.dia;
-        const hora = reservaSeleccionada.hora;
-
-        if (!nuevoHorario[dia]) return prevHorario;
-
-        const slotActual = nuevoHorario[dia][hora];
-
-        if (espacio.tipo === "grupal") {
-          const cuposActuales = slotActual?.cupos ?? 0;
-          const nuevosCupos = Math.max(cuposActuales - 1, 0);
-
-          console.log(`Cupos antes: ${cuposActuales}, después: ${nuevosCupos}`);
-
-          nuevoHorario[dia][hora] = {
-            estado: nuevosCupos === 0,
-            cupos: nuevosCupos,
-          };
-        } else {
-          nuevoHorario[dia][hora] = {
-            estado: true,
-            cupos: 0,
-          };
-        }
-
-        return nuevoHorario;
+      const res = await fetch("/api/reservas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(toInsert),
       });
 
-      agregarReserva({
-        usuarioId: usuario.id,
-        espacioId: id,
-        nombreEspacio: espacioData[0].nombre,
-        dia: reservaSeleccionada.dia,
-        hora: reservaSeleccionada.hora,
-        horaFin: horaFin,
-        precio: precioReserva,
-      });
+      const text = await res.text().catch(() => null);
+      let json = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch (e) {
+        json = null;
+      }
+
+      if (!res.ok) {
+        const message = (json && (json.error || json.message)) || text || `Error al reservar (${res.status})`;
+        throw new Error(message);
+      }
+
+      const inserted = (json && (json.data || json.inserted || json)) ?? null;
+
+      if (Array.isArray(inserted) && inserted.length > 0) {
+        inserted.forEach((ins) => {
+          const espacioIdRet = ins.espacio_id ?? ins.espacioId ?? ins.espacio ?? Number(id);
+          const horaInicioRaw = ins.fecha_hora_inicio ?? ins.start ?? ins.horaInicio;
+          const horaFinRaw = ins.fecha_hora_fin ?? ins.end ?? ins.horaFin;
+          agregarReserva({
+            usuarioId: ins.usuario_id ?? ins.usuarioId ?? usuario?.id,
+            espacioId: Number(espacioIdRet),
+            nombreEspacio: espacio?.nombre,
+            dia: dia,
+            hora: hourLabel(new Date(horaInicioRaw).getUTCHours()),
+            horaFin: hourLabel(new Date(horaFinRaw).getUTCHours()),
+            precio: espacio?.precio,
+          });
+        });
+      } else {
+        hours.forEach((h) => {
+          agregarReserva({
+            usuarioId: usuario?.id,
+            espacioId: Number(id),
+            nombreEspacio: espacio?.nombre,
+            dia: dia,
+            hora: hourLabel(h),
+            horaFin: hourLabel(h + 1),
+            precio: espacio?.precio,
+          });
+        });
+      }
 
       setMostrarPago(false);
-      setReservaSeleccionada(null);
-
+      setSelectedHours(new Set());
       await MySwal.fire({
         icon: "success",
-        title: "¡Reserva exitosa!",
-        text: `Tu reserva para el ${reservaSeleccionada.dia} de ${reservaSeleccionada.hora} a ${horaFin} ha sido confirmada.`,
-        confirmButtonText: "Ver mis reservas",
+        title: "¡Reservado!",
+        text: `Se crearon ${hours.length} reserva(s) para ${dia}.`,
       });
-
       router.push("/mis-reservas");
     } catch (error) {
-      await MySwal.fire({
-        icon: "error",
-        title: "Error en la reserva",
-        text: error.message,
-      });
+      console.error("Pago/Reserva error:", error);
+      await MySwal.fire({ icon: "error", title: "Error", text: error.message || String(error) });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  if (cargando) {
-    return (
-      <div className="d-flex justify-content-center my-5">
-        <Spinner animation="border" variant="primary" />
-      </div>
-    );
-  }
+  const isLoading = cargando || ((espacioRaw === null || espacioRaw === undefined) && !error);
+  if (isLoading) return <div className="text-center my-5"><Spinner animation="border" /></div>;
 
-  if (error) {
-    return (
-      <Container className="mt-4">
-        <Alert variant="danger" className="text-center">
-          {error}
-        </Alert>
-      </Container>
-    );
-  }
+  if (error) return <Container className="mt-4"><Alert variant="danger">{error}</Alert></Container>;
 
-  if (!espacioData || espacioData.length === 0) {
-    return (
-      <Container className="mt-4">
-        <Alert variant="warning" className="text-center">
-          No se encontró el espacio solicitado.
-        </Alert>
-      </Container>
-    );
-  }
+  if (!espacio) return <Container className="mt-4"><Alert variant="warning">Espacio no encontrado</Alert></Container>;
 
-  const espacio = espacioData[0];
-  const horario = horarioLocal || espacio.horario || {};
-
-  const diasSemana = [
-    "lunes",
-    "martes",
-    "miercoles",
-    "jueves",
-    "viernes",
-    "sabado",
-  ];
-
-  const diasNombres = {
-    lunes: "Lunes",
-    martes: "Martes",
-    miercoles: "Miércoles",
-    jueves: "Jueves",
-    viernes: "Viernes",
-    sabado: "Sábado",
-  };
-
-  const horas = horario.lunes
-    ? Object.keys(horario.lunes)
-    : [
-        "8:00 a.m.",
-        "9:00 a.m.",
-        "10:00 a.m.",
-        "11:00 a.m.",
-        "12:00 p.m.",
-        "1:00 p.m.",
-        "2:00 p.m.",
-        "3:00 p.m.",
-        "4:00 p.m.",
-        "5:00 p.m.",
-        "6:00 p.m.",
-        "7:00 p.m.",
-        "8:00 p.m.",
-      ];
+  const hours = buildDailyHours();
+  const chunkedHours = [];
+  for (let i = 0; i < hours.length; i += 3) chunkedHours.push(hours.slice(i, i + 3));
 
   return (
     <>
-      <div className="d-flex">
-        <div className="w-100 p-2">
-          <div className="text-center mb-3 border-bottom pb-3">
-            <h2>{espacio.nombre}</h2>
-            <p>
-              <i className="bi bi-geo-alt-fill text-danger me-1" />
-              <span className="text-muted">{espacio.zona}</span>
-            </p>
-            {espacio.capacidad > 0 && (
-              <p className="mb-3">
-                <i className="bi bi-people-fill text-primary me-1" />
-                <span className="text-muted">
-                  Capacidad: {espacio.capacidad}{" "}
-                  {espacio.capacidad === 1 ? "persona" : "personas"}
-                </span>
-              </p>
-            )}
-
-            {espacio.equipamiento && (
-              <p className="mb-3 text-muted">
-                <i className="bi bi-steam text-info me-1" />
-                <span className="text-muted">Equipamiento: </span>
-                {espacio.equipamiento.join(" · ")}
-              </p>
-            )}
-
-            {espacio.precio > 0 && (
-              <p>
-                <i className="bi bi-currency-euro text-success me-1" />
-                <span className="text-muted">
-                  Precio:{" "}
-                  {espacio.precio.toLocaleString("es-ES", {
-                    style: "currency",
-                    currency: "EUR",
-                  })}
-                </span>
-              </p>
-            )}
+      <Container className="mb-5">
+        <div className="text-center mb-4 pb-3 border-bottom">
+          <h2>{espacio.nombre}</h2>
+          <div className="d-flex justify-content-center gap-4">
+            <span>
+              <i className="bi bi-people-fill text-primary me-2" />
+              Capacidad: {espacio.capacidad}
+            </span>
           </div>
 
-          <div className="w-100">
-            <h5 className="text-center mb-3">Selecciona día y hora</h5>
-
-            <div className="calendario-semanal">
-              <div className="hora-container">
-                <div className="bg-primary text-white p-2 text-center fw-bold">
-                  Hora
-                </div>
-                <div className="dia-slots">
-                  {horas.map((hora) => (
-                    <div key={hora} className="slot-row">
-                      <div className="bg-secondary-subtle text-center fw-bold align-items-center justify-content-center hora-cell">
-                        {hora}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {diasSemana.map((dia) => {
-                const horarioDia = horario[dia] || {};
-
-                return (
-                  <div key={dia} className="dia-container">
-                    <div className="bg-info text-white p-2 text-center fw-bold">
-                      {diasNombres[dia]}
-                    </div>
-                    <div className="dia-slots">
-                      {horas.map((hora) => {
-                        const slot = horarioDia[hora] || {
-                          estado: false,
-                          cupos: null,
-                        };
-                        const disponible = slot.estado === false;
-
-                        return (
-                          <div key={hora} className="slot-row">
-                            <div className="bg-secondary-subtle text-center fw-bold align-items-center justify-content-center hora-cell">
-                              {hora}
-                            </div>
-                            <div className="estado-cell border d-flex align-items-center justify-content-center">
-                              <div className="d-flex flex-column align-items-center">
-                                {disponible ? (
-                                  <>
-                                    <button
-                                      className="btn btn-sm btn-success"
-                                      onClick={() => manejarReserva(dia, hora)}
-                                    >
-                                      Reservar
-                                    </button>
-                                    {slot.cupos != null && (
-                                      <span className="text-danger small mt-1">
-                                        {slot.cupos > 0 ? (
-                                          <>
-                                            Disponible: {slot.cupos}{" "}
-                                            {slot.cupos === 1
-                                              ? "cupo"
-                                              : "cupos"}
-                                          </>
-                                        ) : (
-                                          "Sin cupos"
-                                        )}
-                                      </span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <span className="badge rounded-pill text-bg-secondary p-2">
-                                    Ocupado
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="mt-2">
+            <span className="fw-bold text-success">
+              {Number(espacio.precio).toLocaleString("en-US", { style: "currency", currency: "USD" })} / hora
+            </span>
           </div>
         </div>
-      </div>
 
-      <Modal
-        show={mostrarLogin}
-        onHide={() => {
-          setMostrarLogin(false);
-          setCheckoutPendiente(false);
-        }}
-        centered
-      >
+        <h5 className="text-center mb-3">Selecciona fecha</h5>
+        <div className="d-flex justify-content-center mb-4">
+          <Form.Control
+            type="date"
+            value={selectedDate ?? ""}
+            min={todayString}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v < todayString) {
+                MySwal.fire({
+                  icon: "warning",
+                  title: "Fecha inválida",
+                  text: "Selecciona una fecha de hoy en adelante.",
+                });
+                return;
+              }
+              setSelectedDate(v);
+            }}
+            style={{ maxWidth: 220 }}
+          />
+        </div>
+
+        {selectedDate && (
+          <>
+            <h6 className="text-center mb-2">Horarios disponibles para {selectedDate}</h6>
+            {loadingReservasFecha ? (
+              <div className="text-center my-3">
+                <Spinner animation="border" />
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-2 align-items-center">
+                {chunkedHours.map((row, ri) => (
+                  <div key={ri} className="d-flex gap-3 justify-content-center" style={{ width: "100%", maxWidth: 720 }}>
+                    {row.map((h) => {
+                      const occupied = occupiedHoursSet.has(h);
+                      const checked = selectedHours.has(h);
+                      return (
+                        <Form.Check
+                          key={h}
+                          type="checkbox"
+                          onChange={() => toggleSelectHour(h)}
+                          checked={checked}
+                          disabled={occupied}
+                          label={
+                            <div>
+                              <div className="fw-medium">{hourLabel(h)}</div>
+                            </div>
+                          }
+                          style={{ minWidth: 180 }}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-center mt-3 text-muted">
+              <small>
+                Los horarios muestran bloques de 1 hora (08:00–09:00 … 19:00–20:00). Los ocupados aparecen deshabilitados.
+              </small>
+            </div>
+
+            <div className="text-center mt-4">
+              <Button
+                variant="success"
+                disabled={selectedHours.size === 0 || isSubmitting}
+                onClick={onReservarClick}
+              >
+                Reservar
+              </Button>
+            </div>
+          </>
+        )}
+      </Container>
+
+      <Modal show={mostrarLogin} onHide={() => setMostrarLogin(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>Iniciar Sesión</Modal.Title>
+          <Modal.Title>Login</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Login closeModal={() => setMostrarLogin(false)} />
         </Modal.Body>
       </Modal>
 
-      <Modal
-        show={mostrarPago}
-        onHide={() => setMostrarPago(false)}
-        centered
-        size="lg"
-      >
+      <Modal show={mostrarPago} onHide={() => setMostrarPago(false)} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Finalizar Reserva</Modal.Title>
+          <Modal.Title>Confirmar Reserva</Modal.Title>
         </Modal.Header>
         <Modal.Body className="p-4">
           {reservaSeleccionada && (
             <div className="mb-4 p-3 bg-light rounded">
-              <h5 className="mb-3">Detalle de la reserva</h5>
-              <p className="mb-1">
-                <strong>Espacio:</strong> {espacio.nombre}
-              </p>
-              <p className="mb-1">
-                <strong>Día:</strong> {diasNombres[reservaSeleccionada.dia]}
-              </p>
-              <p className="mb-3">
-                <strong>Hora:</strong> {reservaSeleccionada.hora} (1 hora)
-              </p>
-              <div className="d-flex justify-content-between align-items-center border-top pt-3">
-                <span>Monto total a pagar:</span>
-                <span className="h4 mb-0 text-success fw-bold">
-                  {espacio.precio.toLocaleString("es-ES", {
+              <h5>{espacio.nombre}</h5>
+              <p className="mb-1">Fecha: {reservaSeleccionada.dia}</p>
+              <p className="mb-1">Horas: {reservaSeleccionada.horasLabel}</p>
+              <div className="d-flex justify-content-between border-top pt-2 mt-2">
+                <span>Total:</span>
+                <span className="h4 text-success fw-bold">
+                  {Number(espacio.precio * (reservaSeleccionada.hours?.length ?? 1)).toLocaleString("en-US", {
                     style: "currency",
-                    currency: "EUR",
+                    currency: "USD",
                   })}
                 </span>
               </div>
             </div>
           )}
           <CheckoutForm
-            totalPrecio={espacio.precio}
+            totalPrecio={espacio.precio * (reservaSeleccionada?.hours?.length ?? 1)}
             onPagoExitoso={onPagoExitoso}
+            isSubmitting={isSubmitting}
           />
         </Modal.Body>
       </Modal>
