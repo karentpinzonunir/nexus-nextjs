@@ -8,21 +8,44 @@ import MySwal from "@/utils/swal";
 import "@/css/VistaLibro.css";
 
 /**
- * VistaLibro acepta:
+ * Props:
  * - id (string|number)
  * - modoCompleto (boolean)
- * - initialLibro (obj|null) enviado desde server to avoid client fetch
+ * - initialLibro (obj|null)
+ * - onAgregarCarrito (fn)
+ * - locale (string)  -> p.ej. "es-ES"
+ * - dict (object)    -> diccionario de traducción
  */
-const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCarrito }) => {
+const currencyByLocale = {
+  "en-US": "USD",
+  "es-ES": "EUR",
+  "fr-FR": "EUR",
+  "it-IT": "EUR",
+  "de-DE": "EUR",
+};
+
+const VistaLibro = ({
+  id,
+  modoCompleto = false,
+  initialLibro = null,
+  onAgregarCarrito,
+  locale = "es-ES",
+  dict = {},
+}) => {
   const { agregarAlCarrito } = useCarrito();
 
-  // Si recibimos initialLibro desde el servidor, no hacemos fetch al endpoint.
-  // Construimos la URL SOLO si no hay initialLibro y id es truthy.
-  const fetchUrl = initialLibro ? null : (id ? `/api/productos/${encodeURIComponent(id)}` : null);
+  const fetchUrl = initialLibro
+    ? null
+    : id
+      ? `/api/productos/${encodeURIComponent(id)}`
+      : null;
 
-  // Si no tenemos ni initialLibro ni id, avisamos claramente (evita fetch a undefined)
   if (!initialLibro && !id) {
-    return <Alert variant="warning">ID de producto no especificado.</Alert>;
+    return (
+      <Alert variant="warning">
+        {dict.errors?.no_product_id || "ID de producto no especificado."}
+      </Alert>
+    );
   }
 
   const {
@@ -31,19 +54,17 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
     error: errorLibro,
   } = useFetch(fetchUrl);
 
-  // Usar initialLibro si está presente, si no usar resultado de useFetch
   const libroRaw = initialLibro ?? libroFetchRaw;
 
-  // Categorias (fetch en cliente)
   const {
     data: categoriasRaw,
     cargando: cargandoCats,
     error: errorCats,
   } = useFetch("/api/categorias");
 
-  // Determinar estado de carga global
   const isLoading =
-    (!initialLibro && (cargandoLibro || libroRaw === undefined || libroRaw === null)) ||
+    (!initialLibro &&
+      (cargandoLibro || libroRaw === undefined || libroRaw === null)) ||
     cargandoCats;
 
   if (isLoading) {
@@ -62,42 +83,53 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
     );
   }
 
-  // Resolver formato del libro (diversos formatos posibles)
   const resolvedLibro = (() => {
     if (!libroRaw) return null;
     if (Array.isArray(libroRaw)) return libroRaw[0] ?? null;
-    if (libroRaw.data && Array.isArray(libroRaw.data)) return libroRaw.data[0] ?? null;
-    if (libroRaw.data && typeof libroRaw.data === "object") return libroRaw.data;
+    if (libroRaw.data && Array.isArray(libroRaw.data))
+      return libroRaw.data[0] ?? null;
+    if (libroRaw.data && typeof libroRaw.data === "object")
+      return libroRaw.data;
     return libroRaw;
   })();
 
   if (!resolvedLibro) {
-    return <Alert variant="warning">No se encontró el libro</Alert>;
+    return (
+      <Alert variant="warning">
+        {dict.errors?.not_found || "No se encontró el libro"}
+      </Alert>
+    );
   }
 
-  // Normalizar campos
   const libroData = {
     id: resolvedLibro.id_producto ?? resolvedLibro.id ?? null,
-    categoriaId: resolvedLibro.categoria_id ?? resolvedLibro.categoriaId ?? null,
-    titulo: resolvedLibro.titulo ?? resolvedLibro.nombre ?? "Sin título",
+    categoriaId:
+      resolvedLibro.categoria_id ?? resolvedLibro.categoriaId ?? null,
+    titulo:
+      resolvedLibro.titulo ??
+      resolvedLibro.nombre ??
+      (dict.book_labels?.no_title || "Sin título"),
     descripcion: resolvedLibro.descripcion ?? "",
     tipo: resolvedLibro.tipo_producto ?? resolvedLibro.tipo ?? "",
-    autor: resolvedLibro.autor ?? resolvedLibro.author ?? "Autor desconocido",
+    autor:
+      resolvedLibro.autor ??
+      resolvedLibro.author ??
+      (dict.book_labels?.unknown_author || "Autor desconocido"),
     editorial: resolvedLibro.editorial ?? "",
-    year:
-      resolvedLibro.fecha_publicacion
-        ? new Date(resolvedLibro.fecha_publicacion).getFullYear()
-        : resolvedLibro.year ?? null,
+    year: resolvedLibro.fecha_publicacion
+      ? new Date(resolvedLibro.fecha_publicacion).getFullYear()
+      : (resolvedLibro.year ?? null),
     precio: Number(resolvedLibro.precio ?? 0),
     stock: Number(resolvedLibro.stock ?? 0),
-    portada: resolvedLibro.imagen_url ?? resolvedLibro.portada ?? "/placeholder.png",
+    portada:
+      resolvedLibro.imagen_url ?? resolvedLibro.portada ?? "/placeholder.png",
   };
 
-  // Resolver categorías
   const categorias = (() => {
     if (!categoriasRaw) return [];
     if (Array.isArray(categoriasRaw)) return categoriasRaw;
-    if (categoriasRaw.data && Array.isArray(categoriasRaw.data)) return categoriasRaw.data;
+    if (categoriasRaw.data && Array.isArray(categoriasRaw.data))
+      return categoriasRaw.data;
     return [];
   })();
 
@@ -107,8 +139,10 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
   });
 
   const nombreCategoria = categoriaEncontrada
-    ? (categoriaEncontrada.nombre ?? categoriaEncontrada.nombre_categoria ?? "Categoría")
-    : "Sin categoría";
+    ? (categoriaEncontrada.nombre ??
+      categoriaEncontrada.nombre_categoria ??
+      (dict.book_labels?.category_label || "Categoría"))
+    : dict.book_labels?.no_category || "Sin categoría";
 
   const manejarAgregarCarrito = () => {
     if (!libroData) return;
@@ -127,9 +161,12 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
 
     MySwal.fire({
       icon: "success",
-      title: "Añadido al carrito",
-      text: `${libroData.titulo} se ha añadido a tu carrito de compras.`,
-      confirmButtonText: "Aceptar",
+      title: dict.toasts?.added_title || "Añadido al carrito",
+      text:
+        (dict.toasts?.added_text &&
+          dict.toasts.added_text.replace("{title}", libroData.titulo)) ||
+        `${libroData.titulo} ${dict.toasts?.default_added_text || "se ha añadido a tu carrito de compras."}`,
+      confirmButtonText: dict.buttons?.ok || "Aceptar",
       timer: 2000,
       timerProgressBar: true,
     });
@@ -138,6 +175,14 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
       onAgregarCarrito(item);
     }
   };
+
+  const currency = currencyByLocale[locale] ?? "USD";
+  const formattedPrice =
+    typeof libroData.precio === "number"
+      ? new Intl.NumberFormat(locale, { style: "currency", currency }).format(
+          libroData.precio,
+        )
+      : null;
 
   return (
     <Row>
@@ -150,8 +195,13 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
             onError={(e) => (e.currentTarget.src = "/placeholder.png")}
           />
         ) : (
-          <div className="bg-light d-flex align-items-center justify-content-center" style={{ height: 300 }}>
-            <span className="text-muted">Sin imagen</span>
+          <div
+            className="bg-light d-flex align-items-center justify-content-center"
+            style={{ height: 300 }}
+          >
+            <span className="text-muted">
+              {dict.book_labels?.no_image || "Sin imagen"}
+            </span>
           </div>
         )}
       </Col>
@@ -169,30 +219,36 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
         {modoCompleto && (
           <div className="mt-3 p-3 bg-light rounded shadow-sm">
             <p className="mb-1">
-              <strong>Categoría:</strong> {nombreCategoria}
+              <strong>
+                {dict.book_labels?.category_label || "Categoría"}:
+              </strong>{" "}
+              {nombreCategoria}
             </p>
             <p className="mb-1">
-              <strong>Tipo:</strong> {libroData.tipo || "—"}
+              <strong>{dict.book_labels?.type_label || "Tipo"}:</strong>{" "}
+              {libroData.tipo || "—"}
             </p>
             <p className="mb-1">
-              <strong>Año:</strong> {libroData.year ?? "—"}
+              <strong>{dict.book_labels?.year_label || "Año"}:</strong>{" "}
+              {libroData.year ?? "—"}
             </p>
             <p className="mb-1">
-              <strong>Editorial:</strong> {libroData.editorial || "—"}
+              <strong>
+                {dict.book_labels?.editorial_label || "Editorial"}:
+              </strong>{" "}
+              {libroData.editorial || "—"}
             </p>
             <p className="mb-0">
-              <strong>Stock disponible:</strong> {libroData.stock} unidades
+              <strong>
+                {dict.book_labels?.stock_label || "Stock disponible"}:
+              </strong>{" "}
+              {libroData.stock} {dict.book_labels?.units_label || "unidades"}
             </p>
           </div>
         )}
 
-        {typeof libroData.precio === "number" && (
-          <h4 className="mt-3 text-success fw-bold">
-            {Number(libroData.precio).toLocaleString("en-US", {
-              style: "currency",
-              currency: "USD",
-            })}
-          </h4>
+        {formattedPrice && (
+          <h4 className="mt-3 text-success fw-bold">{formattedPrice}</h4>
         )}
 
         <Button
@@ -202,7 +258,9 @@ const VistaLibro = ({ id, modoCompleto = false, initialLibro = null, onAgregarCa
           onClick={manejarAgregarCarrito}
           disabled={libroData.stock <= 0}
         >
-          {libroData.stock > 0 ? "Añadir al carrito" : "Agotado"}
+          {libroData.stock > 0
+            ? dict.buttons?.add_to_cart || "Añadir al carrito"
+            : dict.buttons?.out_of_stock || "Agotado"}
         </Button>
       </Col>
     </Row>

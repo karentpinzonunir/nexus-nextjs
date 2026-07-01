@@ -1,7 +1,15 @@
+// src/components/CoworkingDetalleClient.jsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { Container, Spinner, Alert, Modal, Form, Button } from "react-bootstrap";
+import {
+  Container,
+  Spinner,
+  Alert,
+  Modal,
+  Form,
+  Button,
+} from "react-bootstrap";
 import { useRouter, useParams } from "next/navigation";
 import useFetch from "@/hooks/useFetch";
 import { useAuth } from "@/context/AuthContext";
@@ -11,8 +19,20 @@ import CheckoutForm from "@/components/CheckoutForm";
 import MySwal from "@/utils/swal";
 import "@/css/CoworkingDetalle.css";
 
-export default function CoworkingDetallePage() {
-  const { id } = useParams();
+/**
+ * Props soportados:
+ * - id (opcional) : si el componente se monta desde server puede recibir el id
+ * - locale (opcional) : "es-ES" por defecto
+ * - dict (opcional) : diccionario de traducción
+ */
+export default function CoworkingDetalleClient({
+  id: propId = null,
+  locale = "es-ES",
+  dict = {},
+}) {
+  const params = useParams(); // en rutas /[locale]/coworking/[id] params puede contener { locale, id }
+  const routeId = params?.id ?? params?.espacioId ?? null;
+  const id = propId ?? routeId;
   const { usuario } = useAuth();
   const { agregarReserva } = useReservas();
   const router = useRouter();
@@ -25,7 +45,11 @@ export default function CoworkingDetallePage() {
     return `${yyyy}-${mm}-${dd}`;
   })();
 
-  const { data: espacioRaw, cargando, error } = useFetch(`/api/espacios/${encodeURIComponent(id)}`);
+  const {
+    data: espacioRaw,
+    cargando,
+    error,
+  } = useFetch(id ? `/api/espacios/${encodeURIComponent(id)}` : null);
 
   const [mostrarLogin, setMostrarLogin] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
@@ -43,28 +67,39 @@ export default function CoworkingDetallePage() {
   const resolvedRawEspacio = (() => {
     if (!espacioRaw) return null;
     if (Array.isArray(espacioRaw)) return espacioRaw[0] ?? null;
-    if (espacioRaw.data && typeof espacioRaw.data === "object" && "espacio" in espacioRaw.data) {
+    if (
+      espacioRaw.data &&
+      typeof espacioRaw.data === "object" &&
+      "espacio" in espacioRaw.data
+    ) {
       return espacioRaw.data.espacio ?? null;
     }
-    if (espacioRaw.data && Array.isArray(espacioRaw.data)) return espacioRaw.data[0] ?? null;
-    if (espacioRaw.espacio && typeof espacioRaw.espacio === "object") return espacioRaw.espacio;
+    if (espacioRaw.data && Array.isArray(espacioRaw.data))
+      return espacioRaw.data[0] ?? null;
+    if (espacioRaw.espacio && typeof espacioRaw.espacio === "object")
+      return espacioRaw.espacio;
     return espacioRaw;
   })();
 
   const espacio = resolvedRawEspacio
     ? {
-      id: resolvedRawEspacio.id_espacio ?? resolvedRawEspacio.id,
-      nombre: resolvedRawEspacio.nombre,
-      capacidad: resolvedRawEspacio.capacidad,
-      descripcion: resolvedRawEspacio.descripcion,
-      zona: resolvedRawEspacio.ubicacion ?? resolvedRawEspacio.zona,
-      precio: resolvedRawEspacio.precio_hora ?? resolvedRawEspacio.precio ?? 0,
-    }
+        id: resolvedRawEspacio.id_espacio ?? resolvedRawEspacio.id,
+        nombre: resolvedRawEspacio.nombre,
+        capacidad: resolvedRawEspacio.capacidad,
+        descripcion: resolvedRawEspacio.descripcion,
+        zona: resolvedRawEspacio.ubicacion ?? resolvedRawEspacio.zona,
+        precio:
+          resolvedRawEspacio.precio_hora ?? resolvedRawEspacio.precio ?? 0,
+      }
     : null;
 
   function hourLabel(h) {
+    // Formato simple; si quieres localizar AM/PM puedes extender según locale
     const hour12 = ((h + 11) % 12) + 1;
-    const ampm = h < 12 ? "a.m." : "p.m.";
+    const ampm =
+      h < 12
+        ? dict.coworking?.am_label || "a.m."
+        : dict.coworking?.pm_label || "p.m.";
     return `${hour12}:00 ${ampm}`;
   }
 
@@ -81,27 +116,52 @@ export default function CoworkingDetallePage() {
 
   useEffect(() => {
     let mounted = true;
+
     async function fetchReservas() {
       if (!selectedDate) {
-        setReservasFecha([]);
-        setOccupiedHoursSet(new Set());
-        setSelectedHours(new Set());
+        // solo actualizamos si el estado no está ya vacío (evitar re-renders innecesarios)
+        setReservasFecha((prev) =>
+          Array.isArray(prev) && prev.length === 0 ? prev : [],
+        );
+        setOccupiedHoursSet((prev) =>
+          prev instanceof Set && prev.size === 0 ? prev : new Set(),
+        );
+        setSelectedHours((prev) =>
+          prev instanceof Set && prev.size === 0 ? prev : new Set(),
+        );
         return;
       }
 
       setLoadingReservasFecha(true);
       try {
         const res = await fetch(
-          `/api/reservas?fecha=${encodeURIComponent(selectedDate)}&espacio=${encodeURIComponent(id)}`
+          `/api/reservas?fecha=${encodeURIComponent(selectedDate)}&espacio=${encodeURIComponent(id)}`,
         );
-        if (!res.ok) throw new Error("Error al consultar reservas");
+        if (!res.ok)
+          throw new Error(
+            dict.coworking?.fetch_reservations_error ||
+              "Error al consultar reservas",
+          );
         const json = await res.json();
-        const data = Array.isArray(json) ? json : json?.data ?? [];
+        const data = Array.isArray(json) ? json : (json?.data ?? []);
         if (!mounted) return;
-        setReservasFecha(data);
+
+        // Si los datos no han cambiado (misma longitud y elementos por id/hora), opcionalmente evitar set
+        setReservasFecha((prev) => {
+          if (Array.isArray(prev) && prev.length === data.length) {
+            let same = true;
+            for (let i = 0; i < data.length; i++) {
+              if (JSON.stringify(prev[i]) !== JSON.stringify(data[i])) {
+                same = false;
+                break;
+              }
+            }
+            if (same) return prev;
+          }
+          return data;
+        });
 
         const occupied = new Set();
-        const hours = buildDailyHours();
         const reservasParaEspacio = data;
 
         for (const reserva of reservasParaEspacio) {
@@ -115,20 +175,51 @@ export default function CoworkingDetallePage() {
           }
         }
 
-        setOccupiedHoursSet(occupied);
+        setOccupiedHoursSet((prev) => {
+          // evitar set si el Set resultante tiene los mismos elementos
+          if (prev instanceof Set && prev.size === occupied.size) {
+            let equal = true;
+            for (const v of occupied)
+              if (!prev.has(v)) {
+                equal = false;
+                break;
+              }
+            if (equal) return prev;
+          }
+          return occupied;
+        });
 
         setSelectedHours((prev) => {
+          // eliminar de selectedHours las horas que ahora están ocupadas
+          if (!(prev instanceof Set)) return new Set();
           const clone = new Set(prev);
           for (const s of Array.from(clone)) {
             if (occupied.has(s)) clone.delete(s);
+          }
+          // si no cambió, devolver prev para evitar re-render
+          if (clone.size === prev.size) {
+            let same = true;
+            for (const v of clone)
+              if (!prev.has(v)) {
+                same = false;
+                break;
+              }
+            if (same) return prev;
           }
           return clone;
         });
       } catch (err) {
         console.error("Error fetch reservas por fecha:", err);
-        setReservasFecha([]);
-        setOccupiedHoursSet(new Set());
-        setSelectedHours(new Set());
+        // solo seteamos si no están ya vacíos (evitar re-render en bucle)
+        setReservasFecha((prev) =>
+          Array.isArray(prev) && prev.length === 0 ? prev : [],
+        );
+        setOccupiedHoursSet((prev) =>
+          prev instanceof Set && prev.size === 0 ? prev : new Set(),
+        );
+        setSelectedHours((prev) =>
+          prev instanceof Set && prev.size === 0 ? prev : new Set(),
+        );
       } finally {
         if (mounted) setLoadingReservasFecha(false);
       }
@@ -138,6 +229,7 @@ export default function CoworkingDetallePage() {
     return () => {
       mounted = false;
     };
+    // NOTE: dejamos fuera `dict` intencionalmente para evitar re-ejecuciones por referencia.
   }, [selectedDate, id]);
 
   const toggleSelectHour = (h) => {
@@ -154,8 +246,11 @@ export default function CoworkingDetallePage() {
     if (!selectedDate || selectedHours.size === 0) {
       await MySwal.fire({
         icon: "info",
-        title: "Selecciona fecha y horario",
-        text: "Elige una fecha y al menos un horario antes de reservar.",
+        title:
+          dict.coworking?.select_date_title || "Selecciona fecha y horario",
+        text:
+          dict.coworking?.select_date_text ||
+          "Elige una fecha y al menos un horario antes de reservar.",
       });
       return;
     }
@@ -164,20 +259,30 @@ export default function CoworkingDetallePage() {
     const horasLabel = horasArray.map((h) => hourLabel(h)).join(", ");
 
     if (!usuario) {
-      setReservaSeleccionada({ dia: selectedDate, hours: horasArray, horasLabel });
+      setReservaSeleccionada({
+        dia: selectedDate,
+        hours: horasArray,
+        horasLabel,
+      });
       setCheckoutPendiente(true);
       const res = await MySwal.fire({
         icon: "info",
-        title: "Inicia sesión",
-        text: "Necesitas una cuenta para reservar.",
-        confirmButtonText: "Entrar",
+        title: dict.coworking?.login_required_title || "Inicia sesión",
+        text:
+          dict.coworking?.login_required_text ||
+          "Necesitas una cuenta para reservar.",
+        confirmButtonText: dict.menu?.login || "Entrar",
         showCancelButton: true,
       });
       if (res.isConfirmed) setMostrarLogin(true);
       return;
     }
 
-    setReservaSeleccionada({ dia: selectedDate, hours: horasArray, horasLabel });
+    setReservaSeleccionada({
+      dia: selectedDate,
+      hours: horasArray,
+      horasLabel,
+    });
     setMostrarPago(true);
   };
 
@@ -192,7 +297,10 @@ export default function CoworkingDetallePage() {
   const onPagoExitoso = async () => {
     try {
       const { dia, hours } = reservaSeleccionada || {};
-      if (!Array.isArray(hours) || hours.length === 0) throw new Error("No hay horas seleccionadas.");
+      if (!Array.isArray(hours) || hours.length === 0)
+        throw new Error(
+          dict.coworking?.no_hours_error || "No hay horas seleccionadas.",
+        );
 
       setIsSubmitting(true);
 
@@ -218,7 +326,11 @@ export default function CoworkingDetallePage() {
       }
 
       if (!res.ok) {
-        const message = (json && (json.error || json.message)) || text || `Error al reservar (${res.status})`;
+        const message =
+          (json && (json.error || json.message)) ||
+          text ||
+          dict.coworking?.reserve_error ||
+          `Error al reservar (${res.status})`;
         throw new Error(message);
       }
 
@@ -226,8 +338,10 @@ export default function CoworkingDetallePage() {
 
       if (Array.isArray(inserted) && inserted.length > 0) {
         inserted.forEach((ins) => {
-          const espacioIdRet = ins.espacio_id ?? ins.espacioId ?? ins.espacio ?? Number(id);
-          const horaInicioRaw = ins.fecha_hora_inicio ?? ins.start ?? ins.horaInicio;
+          const espacioIdRet =
+            ins.espacio_id ?? ins.espacioId ?? ins.espacio ?? Number(id);
+          const horaInicioRaw =
+            ins.fecha_hora_inicio ?? ins.start ?? ins.horaInicio;
           const horaFinRaw = ins.fecha_hora_fin ?? ins.end ?? ins.horaFin;
           agregarReserva({
             usuarioId: ins.usuario_id ?? ins.usuarioId ?? usuario?.id,
@@ -257,28 +371,63 @@ export default function CoworkingDetallePage() {
       setSelectedHours(new Set());
       await MySwal.fire({
         icon: "success",
-        title: "¡Reservado!",
-        text: `Se crearon ${hours.length} reserva(s) para ${dia}.`,
+        title: dict.coworking?.reserved_title || "¡Reservado!",
+        text: (
+          dict.coworking?.reserved_text ||
+          "Se crearon {count} reserva(s) para {date}."
+        )
+          .replace("{count}", String(hours.length))
+          .replace("{date}", dia),
       });
-      router.push("/mis-reservas");
+      router.push(`/${locale}/mis-reservas`);
     } catch (error) {
       console.error("Pago/Reserva error:", error);
-      await MySwal.fire({ icon: "error", title: "Error", text: error.message || String(error) });
+      await MySwal.fire({
+        icon: "error",
+        title: dict.coworking?.error_title || "Error",
+        text: error.message || String(error),
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isLoading = cargando || ((espacioRaw === null || espacioRaw === undefined) && !error);
-  if (isLoading) return <div className="text-center my-5"><Spinner animation="border" /></div>;
+  const isLoading =
+    cargando || ((espacioRaw === null || espacioRaw === undefined) && !error);
+  if (isLoading)
+    return (
+      <div className="text-center my-5">
+        <Spinner animation="border" />
+      </div>
+    );
 
-  if (error) return <Container className="mt-4"><Alert variant="danger">{error}</Alert></Container>;
+  if (error)
+    return (
+      <Container className="mt-4">
+        <Alert variant="danger">{error}</Alert>
+      </Container>
+    );
 
-  if (!espacio) return <Container className="mt-4"><Alert variant="warning">Espacio no encontrado</Alert></Container>;
+  if (!espacio)
+    return (
+      <Container className="mt-4">
+        <Alert variant="warning">
+          {dict.coworking?.not_found || "Espacio no encontrado"}
+        </Alert>
+      </Container>
+    );
 
   const hours = buildDailyHours();
   const chunkedHours = [];
-  for (let i = 0; i < hours.length; i += 3) chunkedHours.push(hours.slice(i, i + 3));
+  for (let i = 0; i < hours.length; i += 3)
+    chunkedHours.push(hours.slice(i, i + 3));
+
+  const currency =
+    dict.coworking?.currency || (locale === "en-US" ? "USD" : "EUR");
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat(locale, { style: "currency", currency }).format(
+      value,
+    );
 
   return (
     <>
@@ -288,18 +437,22 @@ export default function CoworkingDetallePage() {
           <div className="d-flex justify-content-center gap-4">
             <span>
               <i className="bi bi-people-fill text-primary me-2" />
-              Capacidad: {espacio.capacidad}
+              {dict.coworking?.capacity_label || "Capacidad:"}{" "}
+              {espacio.capacidad}
             </span>
           </div>
 
           <div className="mt-2">
             <span className="fw-bold text-success">
-              {Number(espacio.precio).toLocaleString("en-US", { style: "currency", currency: "USD" })} / hora
+              {formatCurrency(Number(espacio.precio))}{" "}
+              {dict.coworking?.per_hour || "/ hora"}
             </span>
           </div>
         </div>
 
-        <h5 className="text-center mb-3">Selecciona fecha</h5>
+        <h5 className="text-center mb-3">
+          {dict.coworking?.select_date || "Selecciona fecha"}
+        </h5>
         <div className="d-flex justify-content-center mb-4">
           <Form.Control
             type="date"
@@ -310,8 +463,10 @@ export default function CoworkingDetallePage() {
               if (v < todayString) {
                 MySwal.fire({
                   icon: "warning",
-                  title: "Fecha inválida",
-                  text: "Selecciona una fecha de hoy en adelante.",
+                  title: dict.coworking?.invalid_date_title || "Fecha inválida",
+                  text:
+                    dict.coworking?.invalid_date_text ||
+                    "Selecciona una fecha de hoy en adelante.",
                 });
                 return;
               }
@@ -323,7 +478,11 @@ export default function CoworkingDetallePage() {
 
         {selectedDate && (
           <>
-            <h6 className="text-center mb-2">Horarios disponibles para {selectedDate}</h6>
+            <h6 className="text-center mb-2">
+              {dict.coworking?.available_hours_for ||
+                "Horarios disponibles para"}{" "}
+              {selectedDate}
+            </h6>
             {loadingReservasFecha ? (
               <div className="text-center my-3">
                 <Spinner animation="border" />
@@ -331,7 +490,11 @@ export default function CoworkingDetallePage() {
             ) : (
               <div className="d-flex flex-column gap-2 align-items-center">
                 {chunkedHours.map((row, ri) => (
-                  <div key={ri} className="d-flex gap-3 justify-content-center" style={{ width: "100%", maxWidth: 720 }}>
+                  <div
+                    key={ri}
+                    className="d-flex gap-3 justify-content-center"
+                    style={{ width: "100%", maxWidth: 720 }}
+                  >
                     {row.map((h) => {
                       const occupied = occupiedHoursSet.has(h);
                       const checked = selectedHours.has(h);
@@ -358,7 +521,8 @@ export default function CoworkingDetallePage() {
 
             <div className="text-center mt-3 text-muted">
               <small>
-                Los horarios muestran bloques de 1 hora (08:00–09:00 … 19:00–20:00). Los ocupados aparecen deshabilitados.
+                {dict.coworking?.time_blocks_note ||
+                  "Los horarios muestran bloques de 1 hora (08:00–09:00 … 19:00–20:00). Los ocupados aparecen deshabilitados."}
               </small>
             </div>
 
@@ -368,7 +532,7 @@ export default function CoworkingDetallePage() {
                 disabled={selectedHours.size === 0 || isSubmitting}
                 onClick={onReservarClick}
               >
-                Reservar
+                {dict.coworking?.reserve_button || "Reservar"}
               </Button>
             </div>
           </>
@@ -377,38 +541,60 @@ export default function CoworkingDetallePage() {
 
       <Modal show={mostrarLogin} onHide={() => setMostrarLogin(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>Login</Modal.Title>
+          <Modal.Title>{dict.login?.title || "Login"}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Login closeModal={() => setMostrarLogin(false)} />
+          <Login
+            closeModal={() => setMostrarLogin(false)}
+            dict={dict}
+            locale={locale}
+          />
         </Modal.Body>
       </Modal>
 
-      <Modal show={mostrarPago} onHide={() => setMostrarPago(false)} centered size="lg">
+      <Modal
+        show={mostrarPago}
+        onHide={() => setMostrarPago(false)}
+        centered
+        size="lg"
+      >
         <Modal.Header closeButton>
-          <Modal.Title>Confirmar Reserva</Modal.Title>
+          <Modal.Title>
+            {dict.coworking?.confirm_title || "Confirmar Reserva"}
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body className="p-4">
           {reservaSeleccionada && (
             <div className="mb-4 p-3 bg-light rounded">
               <h5>{espacio.nombre}</h5>
-              <p className="mb-1">Fecha: {reservaSeleccionada.dia}</p>
-              <p className="mb-1">Horas: {reservaSeleccionada.horasLabel}</p>
+              <p className="mb-1">
+                {dict.coworking?.date_label || "Fecha"}:{" "}
+                {reservaSeleccionada.dia}
+              </p>
+              <p className="mb-1">
+                {dict.coworking?.hours_label || "Horas"}:{" "}
+                {reservaSeleccionada.horasLabel}
+              </p>
               <div className="d-flex justify-content-between border-top pt-2 mt-2">
-                <span>Total:</span>
+                <span>{dict.coworking?.total_label || "Total:"}</span>
                 <span className="h4 text-success fw-bold">
-                  {Number(espacio.precio * (reservaSeleccionada.hours?.length ?? 1)).toLocaleString("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                  })}
+                  {formatCurrency(
+                    Number(
+                      espacio.precio * (reservaSeleccionada.hours?.length ?? 1),
+                    ),
+                  )}
                 </span>
               </div>
             </div>
           )}
           <CheckoutForm
-            totalPrecio={espacio.precio * (reservaSeleccionada?.hours?.length ?? 1)}
+            totalPrecio={
+              espacio.precio * (reservaSeleccionada?.hours?.length ?? 1)
+            }
             onPagoExitoso={onPagoExitoso}
             isSubmitting={isSubmitting}
+            dict={dict}
+            locale={locale}
           />
         </Modal.Body>
       </Modal>

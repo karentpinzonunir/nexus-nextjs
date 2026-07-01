@@ -1,29 +1,48 @@
-'use client';
-import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
-import { Modal, Container, Alert } from "react-bootstrap";
-import Login from "../components/Login";
+// src/components/ProtectedRoute.jsx
+"use client";
 
-const ProtectedRoute = ({ children }) => {
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { Modal, Container, Alert } from "react-bootstrap";
+import Login from "@/components/Login";
+
+export default function ProtectedRoute({
+  children,
+  dict = {},
+  locale = "es-ES",
+}) {
   const { usuario } = useAuth();
+  const d = dict.protected || {};
+
   const [showLogin, setShowLogin] = useState(!usuario);
+
+  useEffect(() => {
+    // sincroniza el modal cuando cambie el usuario (p. ej. al iniciar/cerrar sesión)
+    setShowLogin(!usuario);
+  }, [usuario]);
+
+  const handleCloseLogin = () => setShowLogin(false);
 
   if (!usuario) {
     return (
       <>
-        <Modal show={showLogin} onHide={() => setShowLogin(false)} centered>
+        <Modal show={showLogin} onHide={handleCloseLogin} centered>
           <Modal.Header closeButton>
-            <Modal.Title>Iniciar Sesión</Modal.Title>
+            <Modal.Title>{d.modal_title || "Iniciar Sesión"}</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <Login closeModal={() => setShowLogin(false)} />
+            <Login closeModal={handleCloseLogin} dict={dict} locale={locale} />
           </Modal.Body>
         </Modal>
 
         <Container>
           <Alert variant="warning" className="text-center">
-            <Alert.Heading>Acceso Restringido</Alert.Heading>
-            <p>Debes iniciar sesión para ver esta página.</p>
+            <Alert.Heading>
+              {d.alert_heading || "Acceso Restringido"}
+            </Alert.Heading>
+            <p>
+              {d.alert_text || "Debes iniciar sesión para ver esta página."}
+            </p>
           </Alert>
         </Container>
       </>
@@ -31,6 +50,4 @@ const ProtectedRoute = ({ children }) => {
   }
 
   return children;
-};
-
-export default ProtectedRoute;
+}

@@ -1,3 +1,4 @@
+// src/components/CoworkingClient.jsx
 "use client";
 
 import React from "react";
@@ -6,37 +7,32 @@ import { useRouter } from "next/navigation";
 import useFetch from "@/hooks/useFetch";
 import "@/css/Coworking.css";
 
-const Coworking = () => {
-  // Cambiamos a tu API interna
-  const {
-    data: dataRaw,
-    cargando,
-    error,
-  } = useFetch("/api/espacios");
+const CoworkingClient = ({ locale = "es-ES", dict = {} }) => {
+  // Mantenemos tu ruta original de API
+  const { data: dataRaw, cargando, error } = useFetch("/api/espacios");
 
   const router = useRouter();
 
-  // Normalizar datos de la API (id_espacio -> id, etc.)
-  const espaciosOriginales = Array.isArray(dataRaw) ? dataRaw : dataRaw?.data ?? [];
+  // Lógica de mapeo exacta a la tuya
+  const espaciosOriginales = Array.isArray(dataRaw)
+    ? dataRaw
+    : (dataRaw?.data ?? []);
 
-  const espacios = espaciosOriginales.map(esp => ({
+  const espacios = espaciosOriginales.map((esp) => ({
     id: esp.id_espacio ?? esp.id,
     nombre: esp.nombre,
     capacidad: esp.capacidad,
-    precio: esp.precio_hora ?? esp.precio
+    precio: esp.precio_hora ?? esp.precio,
   }));
 
   const irADetalle = (id) => {
-    router.push(`/coworking/${id}`);
+    // Redirige al detalle manteniendo el idioma
+    router.push(`/${locale}/coworking/${id}`);
   };
 
-  // Lógica de distribución: 2 arriba (col-6), 4 centro (col-3), 2 final (col-6)
   const obtenerAnchoColumna = (index) => {
-    // index 0 y 1 (Los primeros 2) -> col-6 para que queden 2 arriba
     if (index < 2) return 6;
-    // index 2, 3, 4, 5 (Los siguientes 4) -> col-3 para que queden 4 al centro
     if (index >= 2 && index < 6) return 3;
-    // index 6 y 7 (Los últimos 2) -> col-6 para que queden 2 al final
     return 6;
   };
 
@@ -51,26 +47,40 @@ const Coworking = () => {
   if (error) {
     return (
       <Container className="mt-4">
-        <Alert variant="danger" className="text-center">{error}</Alert>
+        <Alert variant="danger" className="text-center">
+          {error}
+        </Alert>
       </Container>
     );
   }
 
+  // Configuración de moneda según locale
+  const currency = locale === "en-US" ? "USD" : "EUR";
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat(locale, { style: "currency", currency }).format(
+      value,
+    );
+
+  // Extraemos los labels con fallbacks limpios para evitar errores de parsing
+  const title = dict.coworking?.list_title ?? "Espacios de Coworking";
+  const description =
+    dict.coworking?.list_description ??
+    "Explora nuestro mapa interactivo de espacios y encuentra el lugar ideal para tu productividad.";
+  const capacityLabel = dict.coworking?.capacity_label ?? "Capacidad:";
+  const personsShort = dict.coworking?.persons_short ?? "pers.";
+  const hourShort = dict.coworking?.hour_short ?? "hr";
+
   return (
     <>
-      <h2 className="mb-4 text-center">Espacios de Coworking</h2>
-      <p>
-        Explora nuestro mapa interactivo de espacios y encuentra el lugar ideal
-        para tu productividad. Selecciona el espacio que mejor se adapte a tus
-        necesidades en nuestra zona de estudio, salas de reuniones o áreas
-        comunes para reservar el día y la hora que prefieras.
-      </p>
+      <h2 className="mb-4 text-center">{title}</h2>
+      <p>{description}</p>
       <div className="p-3 rounded-4 shadow-sm bg-info overflow-auto">
         <Row className="g-3 justify-content-center coworking__contenedor">
           {espacios.map((espacio, index) => (
             <Col
               key={espacio.id}
-              xs={obtenerAnchoColumna(index)} // Distribución específica en pantallas medianas/grandes
+              xs={obtenerAnchoColumna(index)}
+              md={obtenerAnchoColumna(index)}
             >
               <Card
                 className="h-100 shadow-sm border-0 coworking__espacio-card coworking__espacio-card--interactivo"
@@ -83,12 +93,12 @@ const Coworking = () => {
                   {espacio.capacidad > 0 && (
                     <div className="small text-muted">
                       <i className="bi bi-people-fill text-primary me-1" />
-                      Capacidad: {espacio.capacidad} pers.
+                      {capacityLabel} {espacio.capacidad} {personsShort}
                     </div>
                   )}
 
                   <div className="mt-2 fw-bold text-success small">
-                    {Number(espacio.precio).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / hr
+                    {formatCurrency(Number(espacio.precio))} / {hourShort}
                   </div>
                 </Card.Body>
               </Card>
@@ -100,4 +110,4 @@ const Coworking = () => {
   );
 };
 
-export default Coworking;
+export default CoworkingClient;
