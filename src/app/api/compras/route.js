@@ -2,9 +2,6 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/db";
 import { compraSchema } from "@/lib/schemas";
 
-// GET /api/compras
-// - /api/compras               -> todas las compras
-// - /api/compras?usuarioId=10  -> compras de un usuario específico
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -43,12 +40,6 @@ export async function GET(request) {
     }
 }
 
-// POST /api/compras
-// Acepta dos formatos:
-// 1) Desde el carrito actual:
-//    { usuarioId, libroId, cantidad, precioUnitario? }
-// 2) Formato más completo:
-//    { usuario_id, detalle: [{ producto_id, cantidad, precio_unitario }] }
 export async function POST(request) {
     try {
         const body = await request.json();
@@ -56,7 +47,6 @@ export async function POST(request) {
         let usuario_id = null;
         let detalle = [];
 
-        // Formato simple desde el carrito
         if (
             body &&
             (body.usuarioId || body.usuario_id) &&
@@ -82,7 +72,6 @@ export async function POST(request) {
                 );
             }
 
-            // Buscar precio y stock reales del producto
             const { data: producto, error: errProducto } = await supabase
                 .from("producto_editorial")
                 .select("stock, precio")
@@ -115,7 +104,6 @@ export async function POST(request) {
                 },
             ];
         } else {
-            // Formato completo validado por schema
             const validData = compraSchema.parse(body);
             usuario_id = validData.usuario_id;
             detalle = validData.detalle;
@@ -128,7 +116,6 @@ export async function POST(request) {
             );
         }
 
-        // Normalizar detalle, verificar stock y completar precio si hace falta
         const detalleNormalizado = [];
 
         for (const item of detalle) {
@@ -177,13 +164,11 @@ export async function POST(request) {
             });
         }
 
-        // 1. Calcular total
         const total = detalleNormalizado.reduce(
             (acc, item) => acc + item.cantidad * item.precio_unitario,
             0
         );
 
-        // 2. Insertar compra
         const { data: nuevaCompra, error: errCompra } = await supabase
             .from("compra")
             .insert([{ usuario_id, total }])
@@ -194,7 +179,6 @@ export async function POST(request) {
 
         const id_compra = nuevaCompra.id_compra ?? nuevaCompra.id;
 
-        // 3. Insertar detalles y actualizar stock
         for (const item of detalleNormalizado) {
             const { error: errDetalle } = await supabase
                 .from("detalle_compra")

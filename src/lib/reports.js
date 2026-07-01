@@ -1,11 +1,6 @@
 // src/lib/reports.js
 import { supabase } from "./db";
 
-/**
- * Devuelve los productos más vendidos (top ventas).
- * @param {number} limit
- * @returns {Promise<Array>}
- */
 export async function getTopVentas(limit = 10) {
     try {
         const { data, error } = await supabase
@@ -53,8 +48,6 @@ export async function getTopVentas(limit = 10) {
 
         return topVentas;
     } catch (err) {
-        // No romper el build: devolver fallback vacío y loguear para debugging
-        // eslint-disable-next-line no-console
         console.error("getTopVentas error:", err?.message ?? err);
         return [];
     }

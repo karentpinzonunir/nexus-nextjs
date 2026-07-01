@@ -22,24 +22,20 @@ const useFetch = (url, options = {}) => {
         const respuesta = await fetch(url, fetchOptions);
 
         if (!respuesta.ok) {
-          // intentamos leer body para dar más contexto al error
           const text = await respuesta.text().catch(() => null);
           throw new Error(
             `Error: ${respuesta.status}${text ? " - " + text : ""}`
           );
         }
 
-        // intentamos parsear JSON (si la respuesta está vacía no romperá)
         const resultado = await respuesta.json().catch(() => null);
 
-        // Si la API responde { data: ... } devolvemos resultado.data para mantener compatibilidad
         if (resultado && typeof resultado === "object" && "data" in resultado) {
           setData(resultado.data);
         } else {
           setData(resultado);
         }
       } catch (err) {
-        // ignorar AbortError (desmontaje)
         if (err.name === "AbortError") return;
         setError(err.message || "Error desconocido");
       } finally {
@@ -50,7 +46,6 @@ const useFetch = (url, options = {}) => {
     fetchData();
 
     return () => controller.abort();
-    // observamos url y options; stringify(options) para comparar objetos
   }, [url, JSON.stringify(options)]);
 
   return { data, cargando, error };

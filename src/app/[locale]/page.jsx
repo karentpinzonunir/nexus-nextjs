@@ -22,7 +22,6 @@ export default async function HomePage({ params }) {
     id: item.id_producto ?? item.id ?? null,
     titulo:
       item.titulo ?? item.nombre ?? dict.book_labels?.no_title ?? "Sin título",
-    // corregido: agrupamos para evitar mezcla de || y ??
     autor:
       ((item.autor ?? "").toString().trim() ||
         dict.book_labels?.unknown_author) ??

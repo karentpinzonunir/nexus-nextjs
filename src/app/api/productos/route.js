@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/db'
 import { productoSchema } from '@/lib/schemas'
 
-// GET /api/productos?categoria=1&tipo=LIBRO&precio_max=50
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url)
@@ -15,7 +14,6 @@ export async function GET(request) {
 
         let query = supabase.from('producto_editorial').select('*')
 
-        // Aplicación de filtros dinámicos
         if (categoria) query = query.eq('categoria_id', categoria)
         if (tipo) query = query.eq('tipo_producto', tipo.toUpperCase())
         if (autor) query = query.ilike('autor', `%${autor}%`)
@@ -31,7 +29,6 @@ export async function GET(request) {
     }
 }
 
-// POST /api/productos
 export async function POST(request) {
     try {
         const body = await request.json()
