@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "Nexus App - Librería y Coworking",
-  description: "Actividad 1 de Desarrollo Web con Frameworks Front-End",
+  description: "Actividad 3 de Desarrollo Web con Frameworks Front-End",
 };
 
 export default function RootLayout({ children }) {

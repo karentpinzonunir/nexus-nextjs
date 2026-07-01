@@ -1,6 +1,15 @@
+// src/components/Menu.jsx
 "use client";
 import { useState } from "react";
-import { Navbar, Nav, Container, Image, Modal, Badge, NavDropdown } from "react-bootstrap";
+import {
+  Navbar,
+  Nav,
+  Container,
+  Image,
+  Modal,
+  Badge,
+  NavDropdown,
+} from "react-bootstrap";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
@@ -9,7 +18,6 @@ import Login from "./Login";
 
 const logo = "/assets/logo.png";
 
-// Definimos los idiomas disponibles
 const idiomas = [
   { code: "es-ES", label: "ES" },
   { code: "en-US", label: "EN" },
@@ -19,22 +27,30 @@ const idiomas = [
 ];
 
 const Menu = ({ dict = {}, locale = "es-ES" }) => {
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, cargando } = useAuth();
   const { totalItems } = useCarrito();
   const [mostrarLogin, setMostrarLogin] = useState(false);
-  
-  const pathname = usePathname();
+
+  const pathname = usePathname() || `/${locale}`;
   const router = useRouter();
 
   const cerrarSesion = () => {
-    logout();
+    logout(); // redirige a /auth/logout
   };
 
-  // Función para cambiar de idioma sin perder la página actual
+  // Cambiar idioma conservando el resto de la ruta
   const cambiarIdioma = (nuevoLocale) => {
     const segments = pathname.split("/");
+    // Si pathname === '/' o '' -> segments = ['', '']
+    // Aseguramos que segments[1] exista
+    if (!segments[1]) {
+      // raíz -> ir a /<nuevoLocale>
+      router.push(`/${nuevoLocale}`);
+      return;
+    }
     segments[1] = nuevoLocale;
-    router.push(segments.join("/"));
+    const nuevaRuta = segments.join("/") || `/${nuevoLocale}`;
+    router.push(nuevaRuta);
   };
 
   return (
@@ -71,25 +87,40 @@ const Menu = ({ dict = {}, locale = "es-ES" }) => {
               <Nav.Link className="link-primary" as={Link} href={`/${locale}`}>
                 {dict.menu?.home || "Inicio"}
               </Nav.Link>
-              <Nav.Link className="link-primary" as={Link} href={`/${locale}/libreria`}>
+              <Nav.Link
+                className="link-primary"
+                as={Link}
+                href={`/${locale}/libreria`}
+              >
                 {dict.menu?.libreria || "Librería"}
               </Nav.Link>
-              <Nav.Link className="link-primary" as={Link} href={`/${locale}/coworking`}>
+              <Nav.Link
+                className="link-primary"
+                as={Link}
+                href={`/${locale}/coworking`}
+              >
                 {dict.menu?.coworking || "Coworking"}
               </Nav.Link>
               {usuario && (
                 <>
-                  <Nav.Link className="link-primary" as={Link} href={`/${locale}/mis-compras`}>
+                  <Nav.Link
+                    className="link-primary"
+                    as={Link}
+                    href={`/${locale}/mis-compras`}
+                  >
                     {dict.menu?.my_purchases || "Mis Compras"}
                   </Nav.Link>
-                  <Nav.Link className="link-primary" as={Link} href={`/${locale}/mis-reservas`}>
+                  <Nav.Link
+                    className="link-primary"
+                    as={Link}
+                    href={`/${locale}/mis-reservas`}
+                  >
                     {dict.menu?.my_bookings || "Mis Reservas"}
                   </Nav.Link>
                 </>
               )}
             </Nav>
-            <Nav className="align-items-lg-center">             
-
+            <Nav className="align-items-lg-center">
               <Nav.Link
                 as={Link}
                 href={`/${locale}/carrito`}
@@ -103,24 +134,35 @@ const Menu = ({ dict = {}, locale = "es-ES" }) => {
                 )}
               </Nav.Link>
 
-              {usuario ? (
-                <>
-                  <Navbar.Text className="me-3 d-none d-lg-block">
-                    {dict.menu?.welcome || "Hola"}, {usuario.nombre} {usuario.apellidos}
-                  </Navbar.Text>
-                  <Nav.Link className="link-primary" onClick={cerrarSesion}>
-                    {dict.menu?.logout || "Cerrar Sesión"}
+              {/* Esperamos a que cargue la sesión para mostrar Login/Logout */}
+              {!cargando &&
+                (usuario ? (
+                  <>
+                    <Navbar.Text className="me-3 d-none d-lg-block">
+                      {dict.menu?.welcome || "Hola"}, {usuario.nombre}{" "}
+                      {usuario.apellidos}
+                    </Navbar.Text>
+                    <Nav.Link className="link-primary" onClick={cerrarSesion}>
+                      {dict.menu?.logout || "Cerrar Sesión"}
+                    </Nav.Link>
+                  </>
+                ) : (
+                  <Nav.Link
+                    className="link-primary"
+                    onClick={() => setMostrarLogin(true)}
+                  >
+                    {dict.menu?.login || "Iniciar Sesión"}
                   </Nav.Link>
-                </>
-              ) : (
-                <Nav.Link className="link-primary" onClick={() => setMostrarLogin(true)}>
-                  {dict.menu?.login || "Iniciar Sesión"}
-                </Nav.Link>
-              )}
-              <NavDropdown title={idiomas.find(i => i.code === locale)?.label || "ES"} id="language-dropdown" className="me-3">
+                ))}
+
+              <NavDropdown
+                title={idiomas.find((i) => i.code === locale)?.label || "ES"}
+                id="language-dropdown"
+                className="me-3"
+              >
                 {idiomas.map((idioma) => (
-                  <NavDropdown.Item 
-                    key={idioma.code} 
+                  <NavDropdown.Item
+                    key={idioma.code}
                     onClick={() => cambiarIdioma(idioma.code)}
                     active={locale === idioma.code}
                   >
@@ -138,7 +180,12 @@ const Menu = ({ dict = {}, locale = "es-ES" }) => {
           <Modal.Title>{dict.login?.title || "Iniciar Sesión"}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Login closeModal={() => setMostrarLogin(false)} dict={dict} />
+          {/* pasamos locale para que Login construya returnTo correctamente */}
+          <Login
+            closeModal={() => setMostrarLogin(false)}
+            dict={dict}
+            locale={locale}
+          />
         </Modal.Body>
       </Modal>
     </>

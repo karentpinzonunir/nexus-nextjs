@@ -305,7 +305,6 @@ export default function CoworkingDetalleClient({
       setIsSubmitting(true);
 
       const toInsert = hours.map((h) => ({
-        usuario_id: Number(usuario?.id),
         espacio_id: Number(id),
         fecha_hora_inicio: `${dia}T${String(h).padStart(2, "0")}:00:00Z`,
         fecha_hora_fin: `${dia}T${String(h + 1).padStart(2, "0")}:00:00Z`,

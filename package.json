@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.24.0",
     "@supabase/supabase-js": "^2.107.0",
     "bootstrap": "^5.3.3",
     "bootstrap-icons": "^1.11.3",
