@@ -19,27 +19,21 @@ import VistaLibro from "@/components/VistaLibro";
 import MySwal from "@/utils/swal";
 import "@/css/Libreria.css";
 
-/**
- * Intenta varios campos localizados en un objeto según el locale.
- * bases: array de nombres base a probar, ej. ["titulo","title","nombre"]
- */
 function getLocalizedField(obj = {}, bases = [], locale = "es-ES") {
   if (!obj || typeof obj !== "object") return null;
-  const lang = (locale || "").split("-")[0]; // "es" de "es-ES"
+  const lang = (locale || "").split("-")[0];
   const candidates = [];
 
   for (const base of bases) {
-    candidates.push(`${base}_${locale}`); // e.g. title_en-US (poco común)
-    candidates.push(`${base}_${lang}`); // e.g. title_en
-    // camel-case variant: base + Lang (TitleEn)
+    candidates.push(`${base}_${locale}`); 
+    candidates.push(`${base}_${lang}`); 
     candidates.push(`${base}${lang.charAt(0).toUpperCase() + lang.slice(1)}`);
-    // common suffixes
     candidates.push(`${base}_en`);
     candidates.push(`${base}_es`);
     candidates.push(`${base}_fr`);
     candidates.push(`${base}_it`);
     candidates.push(`${base}_de`);
-    candidates.push(base); // fallback sin sufijo
+    candidates.push(base); 
   }
 
   const extras = [
@@ -75,7 +69,6 @@ export default function LibreriaClient({ locale = "es-ES", dict = {} }) {
   const [libroIdSeleccionado, setLibroIdSeleccionado] = useState(null);
   const router = useRouter();
 
-  // Añadimos locale como parámetro para que el backend (si lo soporta) devuelva campos localizados.
   const categoriasUrl = `/api/categorias${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`;
 
   const {
@@ -134,7 +127,6 @@ export default function LibreriaClient({ locale = "es-ES", dict = {} }) {
     return [];
   })();
 
-  // Mapear categorías intentando campos localizados
   const categorias = (categoriasSource || []).map((c, idx) => {
     const id = c.id_categoria ?? c.id ?? c.categoria_id ?? `cat-${idx}`;
 
@@ -168,7 +160,6 @@ export default function LibreriaClient({ locale = "es-ES", dict = {} }) {
     return [];
   })();
 
-  // Mapear productos intentando campos localizados
   const libros = (productosSource || []).map((p, index) => {
     const id = p.id_producto ?? p.id ?? p.idProducto ?? `temp-id-${index}`;
 
@@ -244,7 +235,6 @@ export default function LibreriaClient({ locale = "es-ES", dict = {} }) {
     router.push(`/${locale}/libro/${id}`);
   };
 
-  // Moneda por locale (ajusta a tus necesidades)
   const currency = locale === "en-US" ? "USD" : "EUR";
   const formatCurrency = (value) =>
     new Intl.NumberFormat(locale, { style: "currency", currency }).format(
